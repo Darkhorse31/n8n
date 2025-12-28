@@ -1,0 +1,625 @@
+{
+  "name": "LinkedIn Auto-Apply with OpenRouter AI",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule_trigger",
+      "name": "Run Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400],
+      "notes": "Checks for new jobs every 6 hours"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "profile",
+              "name": "profile",
+              "value": "={\n  \"fullName\": \"Prateek Kumar\",\n  \"email\": \"prateek.devfullstack@gmail.com\",\n  \"phone\": \"+91-XXXXXXXXXX\",\n  \"linkedinUrl\": \"https://linkedin.com/in/prateek-kumar\",\n  \"githubUrl\": \"https://github.com/Darkhorse31\",\n  \"portfolio\": \"https://prateek-portfolio.com\",\n  \"currentTitle\": \"Backend Software Engineer (SDE-2)\",\n  \"currentCompany\": \"CodeMaya\",\n  \"yearsOfExperience\": \"3.5\",\n  \"location\": \"Lucknow, India\",\n  \"openToRemote\": true,\n  \"openToRelocate\": true,\n  \"preferredLocations\": [\"Bangalore\", \"Hyderabad\", \"Pune\", \"Remote\"],\n  \"skills\": [\"Node.js\", \"Express.js\", \"NestJS\", \"TypeScript\", \"PostgreSQL\", \"MongoDB\", \"Redis\", \"GraphQL\", \"Microservices\", \"Docker\", \"GCP\", \"AWS\"],\n  \"resume\": \"PRATEEK KUMAR - Backend Software Engineer (SDE-2)\\n\\nPROFESSIONAL SUMMARY:\\nResults-driven Backend Software Engineer with 3.5+ years of experience designing scalable backend systems for SaaS, fintech, and marketplace platforms. Expert in Node.js, NestJS, PostgreSQL, MongoDB, Redis, and cloud infrastructure (GCP/AWS).\\n\\nKEY SKILLS:\\n- Backend: Node.js, Express.js, NestJS, TypeScript, JavaScript\\n- APIs: RESTful APIs, GraphQL, WebSockets\\n- Databases: PostgreSQL, MongoDB, Redis, Elasticsearch\\n- Cloud: GCP (Cloud Run, Pub/Sub), AWS (EC2, S3, RDS)\\n- Architecture: Microservices, Event-Driven Architecture\\n\\nKEY ACHIEVEMENTS:\\n- Optimized API response times by 35% through caching\\n- Scaled real-time messaging to 10K+ messages/minute\\n- Maintained 99.9% service uptime\\n- Mentored 8+ junior developers\\n\\nCURRENT POSITION:\\nBackend Software Engineer (SDE-2) at CodeMaya (Jun 2022 - Present)\\n- Handling 100K+ API requests/day\\n- Managing 10K+ concurrent WebSocket connections\\n- Reduced MTTR from 90 to 35 minutes\\n\\nEDUCATION:\\nMCA (In Progress), BCA (Completed) - IGNOU\",\n  \"expectedSalary\": \"15-25 LPA\",\n  \"noticePeriod\": \"30 days / Negotiable\",\n  \"motivation\": \"Passionate about building scalable backend systems and working with cutting-edge technologies. Looking for challenging opportunities to grow as a senior engineer and contribute to impactful products.\"\n}",
+              "type": "object"
+            },
+            {
+              "id": "openrouter_api_key",
+              "name": "openrouterApiKey",
+              "value": "={{$env.OPENROUTER_API_KEY}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set_profile",
+      "name": "Load Profile & API Key",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://www.linkedin.com/jobs/search/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "keywords",
+              "value": "Backend Engineer Node.js"
+            },
+            {
+              "name": "location",
+              "value": "India"
+            },
+            {
+              "name": "f_TPR",
+              "value": "r86400"
+            },
+            {
+              "name": "f_E",
+              "value": "3,4"
+            },
+            {
+              "name": "f_AL",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "search_easy_apply_jobs",
+      "name": "Search Easy Apply Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 400],
+      "notes": "f_AL=true filters for Easy Apply jobs only"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LinkedIn job listings from HTML\nconst html = $input.item.json.body || '';\nconst jobCards = [];\n\n// Extract job data using regex\nconst titleRegex = /<h3[^>]*class=\"[^\"]*base-search-card__title[^\"]*\"[^>]*>([^<]+)<\\/h3>/gi;\nconst companyRegex = /<h4[^>]*class=\"[^\"]*base-search-card__subtitle[^\"]*\"[^>]*>\\s*<a[^>]*>([^<]+)<\\/a>/gi;\nconst locationRegex = /<span[^>]*class=\"[^\"]*job-search-card__location[^\"]*\"[^>]*>([^<]+)<\\/span>/gi;\nconst linkRegex = /<a[^>]*class=\"[^\"]*base-card__full-link[^\"]*\"[^>]*href=\"([^\"]+)\"/gi;\n\nconst titles = [...html.matchAll(titleRegex)].map(m => m[1].trim());\nconst companies = [...html.matchAll(companyRegex)].map(m => m[1].trim());\nconst locations = [...html.matchAll(locationRegex)].map(m => m[1].trim());\nconst links = [...html.matchAll(linkRegex)].map(m => m[1].split('?')[0]);\n\nconst minLength = Math.min(titles.length, companies.length, locations.length, links.length);\n\nfor (let i = 0; i < minLength; i++) {\n  jobCards.push({\n    jobTitle: titles[i],\n    company: companies[i],\n    location: locations[i],\n    jobUrl: links[i],\n    jobId: links[i].match(/jobs\\/view\\/(\\d+)/)?.[1] || `job_${i}`,\n    isEasyApply: html.includes('Easy Apply'),\n    scrapedAt: new Date().toISOString()\n  });\n}\n\nreturn jobCards.map(job => ({ json: job }));"
+      },
+      "id": "parse_jobs",
+      "name": "Parse Job Listings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "rate_limit",
+      "name": "Rate Limit",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1050, 400],
+      "webhookId": "rate-limit-webhook"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.jobUrl }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "fetch_job_details",
+      "name": "Fetch Job Description",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract comprehensive job details from HTML\nconst html = $input.item.json.body || '';\nlet description = '';\nlet requirements = [];\nlet questions = [];\n\n// Extract job description\nconst descMatches = [\n  html.match(/<div[^>]*class=\"[^\"]*show-more-less-html__markup[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/i),\n  html.match(/<div[^>]*class=\"[^\"]*description__text[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/i)\n];\n\nfor (const match of descMatches) {\n  if (match && match[1]) {\n    description = match[1];\n    break;\n  }\n}\n\n// Clean HTML\ndescription = description\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/g, ' ')\n  .replace(/&amp;/g, '&')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .substring(0, 3000);\n\n// Extract application questions (if any)\nconst questionRegex = /<label[^>]*>([^<]+)<\\/label>/gi;\nconst questionMatches = [...html.matchAll(questionRegex)];\nquestions = questionMatches\n  .map(m => m[1].trim())\n  .filter(q => q.length > 10 && !q.includes('undefined'));\n\n// Detect required fields\nconst hasPhoneField = html.includes('phone') || html.includes('Phone');\nconst hasWebsiteField = html.includes('website') || html.includes('portfolio');\nconst hasCoverLetter = html.includes('cover letter') || html.includes('Cover Letter');\nconst hasResumeUpload = html.includes('resume') || html.includes('Resume');\n\nreturn {\n  json: {\n    ...items[0].json,\n    description: description || 'Description not available',\n    applicationQuestions: questions,\n    requiredFields: {\n      phone: hasPhoneField,\n      website: hasWebsiteField,\n      coverLetter: hasCoverLetter,\n      resume: hasResumeUpload\n    }\n  }\n};"
+      },
+      "id": "extract_job_data",
+      "name": "Extract Job Details & Questions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Load Profile & API Key').item.json.openrouterApiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "anthropic/claude-3.5-sonnet"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"You are an expert career coach analyzing job-candidate fit.\\n\\n## CANDIDATE:\\n{{ $('Load Profile & API Key').item.json.profile.resume }}\\n\\n## JOB:\\n**Title:** {{ $json.jobTitle }}\\n**Company:** {{ $json.company }}\\n**Location:** {{ $json.location }}\\n\\n**Description:**\\n{{ $json.description }}\\n\\n## TASK:\\nAnalyze the match and respond with ONLY valid JSON (no markdown):\\n\\n{\\n  \\\"matchScore\\\": <0-100>,\\n  \\\"isGoodMatch\\\": <boolean>,\\n  \\\"matchingSkills\\\": [\\\"skill1\\\", \\\"skill2\\\"],\\n  \\\"missingSkills\\\": [\\\"skill1\\\"],\\n  \\\"reasoning\\\": \\\"<brief analysis>\\\",\\n  \\\"shouldAutoApply\\\": <boolean>,\\n  \\\"applicationPriority\\\": \\\"<high|medium|low>\\\"\\n}\\n\\nScore 75+: Excellent match\\nScore 60-74: Good match\\nBelow 60: Skip\"}]"
+            },
+            {
+              "name": "max_tokens",
+              "value": "1500"
+            },
+            {
+              "name": "temperature",
+              "value": "0.7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ai_job_analysis",
+      "name": "OpenRouter: Analyze Match",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 400],
+      "notes": "Uses OpenRouter API with Claude 3.5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse OpenRouter AI response\nconst response = $input.item.json;\nlet analysis = {};\n\ntry {\n  const content = response.choices[0].message.content;\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    analysis = JSON.parse(jsonMatch[0]);\n  }\n} catch (error) {\n  analysis = {\n    matchScore: 50,\n    isGoodMatch: false,\n    matchingSkills: [],\n    missingSkills: [],\n    reasoning: 'Failed to analyze',\n    shouldAutoApply: false,\n    applicationPriority: 'low'\n  };\n}\n\nreturn {\n  json: {\n    ...items[0].json,\n    ...analysis,\n    analyzedAt: new Date().toISOString()\n  }\n};"
+      },
+      "id": "parse_analysis",
+      "name": "Parse AI Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "match_threshold",
+              "leftValue": "={{ $json.matchScore }}",
+              "rightValue": 70,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "auto_apply_flag",
+              "leftValue": "={{ $json.shouldAutoApply }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter_good_matches",
+      "name": "Filter: Score 70+ & Auto-Apply",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2050, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Load Profile & API Key').item.json.openrouterApiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "anthropic/claude-3.5-sonnet"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"Generate a compelling cover letter for this job application.\\n\\n## CANDIDATE PROFILE:\\n{{ $('Load Profile & API Key').item.json.profile.resume }}\\n\\n## JOB DETAILS:\\n**Position:** {{ $json.jobTitle }}\\n**Company:** {{ $json.company }}\\n**Location:** {{ $json.location }}\\n**Description:** {{ $json.description }}\\n\\n## MATCHING SKILLS:\\n{{ $json.matchingSkills.join(', ') }}\\n\\n## INSTRUCTIONS:\\nWrite a concise, professional cover letter (250-350 words) that:\\n1. Opens with enthusiasm about the specific role and company\\n2. Highlights 2-3 most relevant achievements matching the job requirements\\n3. Shows understanding of the company's tech stack/needs\\n4. Expresses genuine interest and cultural fit\\n5. Closes with call to action\\n\\nTone: Professional, confident, authentic\\nAvoid: Generic phrases, overly formal language, repetition from resume\\n\\nReturn ONLY the cover letter text, no additional formatting.\"}]"
+            },
+            {
+              "name": "max_tokens",
+              "value": "800"
+            },
+            {
+              "name": "temperature",
+              "value": "0.8"
+            }
+          ]
+        }
+      },
+      "id": "generate_cover_letter",
+      "name": "OpenRouter: Generate Cover Letter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 300],
+      "notes": "Creates personalized cover letter"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Load Profile & API Key').item.json.openrouterApiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "anthropic/claude-3.5-sonnet"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"Answer these job application questions professionally and concisely.\\n\\n## CANDIDATE:\\n{{ $('Load Profile & API Key').item.json.profile.resume }}\\n\\n## QUESTIONS:\\n{{ $json.applicationQuestions.join('\\\\n') }}\\n\\n## INSTRUCTIONS:\\nFor each question, provide a clear, honest, and professional answer.\\nKeep answers concise (1-3 sentences each unless more detail is clearly needed).\\nBe specific and use examples from the resume when relevant.\\n\\nReturn as JSON array:\\n[\\n  {\\\"question\\\": \\\"...\\\", \\\"answer\\\": \\\"...\\\"},\\n  {\\\"question\\\": \\\"...\\\", \\\"answer\\\": \\\"...\\\"}\\n]\"}]"
+            },
+            {
+              "name": "max_tokens",
+              "value": "1200"
+            }
+          ]
+        }
+      },
+      "id": "generate_answers",
+      "name": "OpenRouter: Answer Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 500],
+      "notes": "Generates answers for application questions"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all generated content for application\nconst coverLetterResponse = $('OpenRouter: Generate Cover Letter').item.json;\nconst questionsResponse = $('OpenRouter: Answer Questions').item.json;\nconst profile = $('Load Profile & API Key').item.json.profile;\nconst jobData = $input.item.json;\n\nlet coverLetter = '';\nlet questionAnswers = [];\n\ntry {\n  coverLetter = coverLetterResponse.choices[0].message.content.trim();\n} catch (e) {\n  coverLetter = 'Error generating cover letter';\n}\n\ntry {\n  const answersContent = questionsResponse.choices[0].message.content;\n  const jsonMatch = answersContent.match(/\\[[\\s\\S]*\\]/);\n  if (jsonMatch) {\n    questionAnswers = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  questionAnswers = [];\n}\n\n// Prepare application payload\nconst applicationData = {\n  // Basic Info\n  fullName: profile.fullName,\n  email: profile.email,\n  phone: profile.phone,\n  linkedinUrl: profile.linkedinUrl,\n  portfolioUrl: profile.portfolio || profile.githubUrl,\n  \n  // Professional Info\n  currentTitle: profile.currentTitle,\n  yearsOfExperience: profile.yearsOfExperience,\n  currentCompany: profile.currentCompany,\n  location: profile.location,\n  \n  // Application Content\n  coverLetter: coverLetter,\n  questionAnswers: questionAnswers,\n  \n  // Additional Fields\n  willingToRelocate: profile.openToRelocate ? 'Yes' : 'No',\n  expectedSalary: profile.expectedSalary,\n  noticePeriod: profile.noticePeriod,\n  workAuthorization: 'Authorized to work in India',\n  \n  // Resume\n  resumeText: profile.resume,\n  \n  // Why interested\n  motivation: profile.motivation\n};\n\nreturn {\n  json: {\n    ...jobData,\n    applicationData: applicationData,\n    readyToApply: true,\n    generatedAt: new Date().toISOString()\n  }\n};"
+      },
+      "id": "prepare_application",
+      "name": "Prepare Application Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// IMPORTANT: This is a SIMULATION node\n// Actual LinkedIn API application submission requires:\n// 1. LinkedIn API access (Limited Partner Program)\n// 2. OAuth authentication\n// 3. Selenium/Puppeteer for browser automation\n\nconst appData = $input.item.json.applicationData;\nconst jobData = $input.item.json;\n\n// Simulate application submission\nconst applicationResult = {\n  status: 'simulated',\n  message: 'Application data prepared successfully',\n  jobTitle: jobData.jobTitle,\n  company: jobData.company,\n  jobUrl: jobData.jobUrl,\n  applicationMethod: 'manual_review_required',\n  submittedAt: new Date().toISOString(),\n  \n  // What would be submitted\n  wouldSubmit: {\n    name: appData.fullName,\n    email: appData.email,\n    phone: appData.phone,\n    coverLetterLength: appData.coverLetter.length,\n    questionsAnswered: appData.questionAnswers.length,\n    linkedinProfile: appData.linkedinUrl\n  },\n  \n  // Next steps for actual implementation\n  nextSteps: [\n    '1. Set up LinkedIn authentication (OAuth)',\n    '2. Implement browser automation (Puppeteer/Selenium)',\n    '3. Add CAPTCHA handling',\n    '4. Implement rate limiting and error handling',\n    '5. Store application tracking data'\n  ],\n  \n  // Warning\n  warning: 'Automated job applications may violate LinkedIn ToS. Use with caution and review applications manually.'\n};\n\nreturn {\n  json: {\n    ...jobData,\n    applicationResult: applicationResult\n  }\n};"
+      },
+      "id": "submit_application",
+      "name": "Submit Application (SIMULATED)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2650, 400],
+      "notes": "⚠️ Simulation only - requires LinkedIn API or browser automation"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id",
+          "cachedResultName": "Job Applications Tracker"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.applicationResult.submittedAt }}",
+            "Job Title": "={{ $json.jobTitle }}",
+            "Company": "={{ $json.company }}",
+            "Location": "={{ $json.location }}",
+            "Match Score": "={{ $json.matchScore }}",
+            "Priority": "={{ $json.applicationPriority }}",
+            "Job URL": "={{ $json.jobUrl }}",
+            "Status": "={{ $json.applicationResult.status }}",
+            "Cover Letter Preview": "={{ $json.applicationData.coverLetter.substring(0, 100) }}...",
+            "Questions Answered": "={{ $json.applicationData.questionAnswers.length }}",
+            "Applied Date": "={{ $now.toFormat('yyyy-MM-dd HH:mm') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log_to_sheet",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2850, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "combineAll"
+      },
+      "id": "aggregate_results",
+      "name": "Aggregate All Applications",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [3050, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const applications = $input.all().map(item => item.json);\n\n// Generate summary email HTML\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }\n    .container { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }\n    .header { background: linear-gradient(135deg, #0077B5 0%, #00A0DC 100%); color: white; padding: 30px; text-align: center; }\n    .header h1 { margin: 0; font-size: 28px; }\n    .content { padding: 30px; }\n    .summary { background: #e8f4f8; border-left: 4px solid #0077B5; padding: 15px; margin-bottom: 20px; border-radius: 4px; }\n    .app-card { border: 1px solid #e0e0e0; border-radius: 6px; padding: 20px; margin-bottom: 20px; background: #fafafa; }\n    .app-title { font-size: 18px; font-weight: bold; color: #0077B5; margin-bottom: 10px; }\n    .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-right: 8px; }\n    .badge.high { background: #10B981; color: white; }\n    .badge.medium { background: #3B82F6; color: white; }\n    .badge.simulated { background: #F59E0B; color: white; }\n    .cover-letter { background: #f9f9f9; border-left: 3px solid #0077B5; padding: 15px; margin: 15px 0; font-style: italic; color: #555; }\n    .footer { text-align: center; padding: 20px; color: #666; font-size: 13px; border-top: 1px solid #e0e0e0; }\n    .btn { display: inline-block; background: #0077B5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🤖 Auto-Apply Job Report</h1>\n      <p>${new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>\n    </div>\n    \n    <div class=\"content\">\n      <div class=\"summary\">\n        <strong>📊 Summary:</strong> Found and processed <strong>${applications.length}</strong> matching job(s)\n      </div>\n`;\n\napplications.forEach((app, index) => {\n  html += `\n      <div class=\"app-card\">\n        <div class=\"app-title\">${index + 1}. ${app.jobTitle}</div>\n        <div style=\"margin: 8px 0;\">\n          <span class=\"badge ${app.applicationPriority}\">${app.matchScore}% Match</span>\n          <span class=\"badge ${app.applicationPriority}\">${app.applicationPriority.toUpperCase()} Priority</span>\n          <span class=\"badge simulated\">${app.applicationResult.status.toUpperCase()}</span>\n        </div>\n        <div style=\"color: #666; margin: 10px 0;\">\n          <div>🏢 <strong>${app.company}</strong></div>\n          <div>📍 ${app.location}</div>\n          <div>✅ Matching Skills: ${app.matchingSkills.join(', ')}</div>\n        </div>\n        \n        <div style=\"margin-top: 15px;\">\n          <strong>📝 Generated Cover Letter:</strong>\n          <div class=\"cover-letter\">${app.applicationData.coverLetter}</div>\n        </div>\n        \n        ${app.applicationData.questionAnswers.length > 0 ? `\n        <div style=\"margin-top: 15px;\">\n          <strong>❓ Questions Answered: ${app.applicationData.questionAnswers.length}</strong>\n          <ul style=\"margin: 10px 0; padding-left: 20px;\">\n            ${app.applicationData.questionAnswers.map(qa => `<li><strong>${qa.question}</strong><br/>${qa.answer}</li>`).join('')}\n          </ul>\n        </div>\n        ` : ''}\n        \n        <div style=\"margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;\">\n          <strong>⚠️ Next Action Required:</strong>\n          <p style=\"margin: 8px 0; color: #d97706;\">${app.applicationResult.message}</p>\n          <a href=\"${app.jobUrl}\" class=\"btn\" target=\"_blank\">Review & Apply Manually →</a>\n        </div>\n      </div>\n  `;\n});\n\nhtml += `\n      <div style=\"background: #FFF9E6; border: 2px solid #FFC107; padding: 20px; border-radius: 6px; margin-top: 30px;\">\n        <h3 style=\"margin-top: 0; color: #F57C00;\">⚠️ Important Notice</h3>\n        <p><strong>Current Status:</strong> Application data has been prepared and reviewed, but NOT automatically submitted.</p>\n        <p><strong>Why?</strong> LinkedIn restricts automated job applications and requires:</p>\n        <ul>\n          <li>Manual OAuth authentication</li>\n          <li>Browser automation (Puppeteer/Selenium)</li>\n          <li>CAPTCHA solving</li>\n          <li>Compliance with LinkedIn Terms of Service</li>\n        </ul>\n        <p><strong>Recommendation:</strong> Use this workflow to:</p>\n        <ol>\n          <li>✅ Find and analyze matching jobs automatically</li>\n          <li>✅ Generate personalized cover letters</li>\n          <li>✅ Prepare answers to application questions</li>\n          <li>✅ Track applications in Google Sheets</li>\n          <li>⚠️ <strong>Review and submit applications manually</strong></li>\n        </ol>\n      </div>\n    </div>\n    \n    <div class=\"footer\">\n      <p><strong>🤖 Powered by n8n + OpenRouter AI</strong></p>\n      <p>Generated automatically • Review before submitting</p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  json: {\n    applicationCount: applications.length,\n    emailHTML: html,\n    emailSubject: `🤖 ${applications.length} Job Application${applications.length !== 1 ? 's' : ''} Ready for Review`,\n    applications: applications\n  }\n};"
+      },
+      "id": "create_summary_email",
+      "name": "Create Summary Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3250, 400]
+    },
+    {
+      "parameters": {
+        "fromEmail": "prateek.devfullstack@gmail.com",
+        "toEmail": "prateek.devfullstack@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "emailFormat": "html",
+        "message": "={{ $json.emailHTML }}",
+        "options": {}
+      },
+      "id": "send_notification",
+      "name": "Send Email Notification",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [3450, 400],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "schedule_trigger": {
+      "main": [
+        [
+          {
+            "node": "set_profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_profile": {
+      "main": [
+        [
+          {
+            "node": "search_easy_apply_jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_easy_apply_jobs": {
+      "main": [
+        [
+          {
+            "node": "parse_jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_jobs": {
+      "main": [
+        [
+          {
+            "node": "rate_limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rate_limit": {
+      "main": [
+        [
+          {
+            "node": "fetch_job_details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch_job_details": {
+      "main": [
+        [
+          {
+            "node": "extract_job_data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract_job_data": {
+      "main": [
+        [
+          {
+            "node": "ai_job_analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ai_job_analysis": {
+      "main": [
+        [
+          {
+            "node": "parse_analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_analysis": {
+      "main": [
+        [
+          {
+            "node": "filter_good_matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter_good_matches": {
+      "main": [
+        [
+          {
+            "node": "generate_cover_letter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "generate_answers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generate_cover_letter": {
+      "main": [
+        [
+          {
+            "node": "prepare_application",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generate_answers": {
+      "main": [
+        [
+          {
+            "node": "prepare_application",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepare_application": {
+      "main": [
+        [
+          {
+            "node": "submit_application",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "submit_application": {
+      "main": [
+        [
+          {
+            "node": "log_to_sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "log_to_sheet": {
+      "main": [
+        [
+          {
+            "node": "aggregate_results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "aggregate_results": {
+      "main": [
+        [
+          {
+            "node": "create_summary_email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_summary_email": {
+      "main": [
+        [
+          {
+            "node": "send_notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "instanceId": "your-n8n-instance-id"
+  },
+  "id": "linkedin-auto-apply",
+  "tags": []
+}

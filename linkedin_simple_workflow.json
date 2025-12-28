@@ -1,0 +1,436 @@
+{
+  "name": "LinkedIn Job Tracker (No AI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule_trigger",
+      "name": "Run Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "profile",
+              "name": "profile",
+              "value": "={\n  \"name\": \"Prateek Kumar\",\n  \"email\": \"prateek.devfullstack@gmail.com\",\n  \"phone\": \"+91-XXXXXXXXXX\",\n  \"location\": \"Lucknow, India\",\n  \"currentTitle\": \"Backend Software Engineer (SDE-2)\",\n  \"experience\": \"3.5 years\",\n  \"mustHaveKeywords\": [\"Node.js\", \"Backend\", \"NestJS\", \"Express\", \"PostgreSQL\", \"MongoDB\", \"Redis\", \"Microservices\", \"API\"],\n  \"preferredKeywords\": [\"GraphQL\", \"Docker\", \"GCP\", \"AWS\", \"TypeScript\", \"WebSockets\"],\n  \"avoidKeywords\": [\"Frontend\", \"React\", \"Angular\", \"Vue\", \"Mobile\", \"iOS\", \"Android\"],\n  \"minKeywordMatch\": 3,\n  \"preferredLocations\": [\"Remote\", \"Bangalore\", \"Hyderabad\", \"Pune\", \"Mumbai\", \"Delhi\", \"Lucknow\"],\n  \"jobTitles\": [\"Backend Engineer\", \"Backend Developer\", \"Node.js Developer\", \"Software Engineer\", \"SDE-2\", \"API Developer\", \"Microservices Engineer\"]\n}",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "set_profile",
+      "name": "Set Job Preferences",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://www.linkedin.com/jobs/search/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "keywords",
+              "value": "Backend Engineer Node.js"
+            },
+            {
+              "name": "location",
+              "value": "India"
+            },
+            {
+              "name": "f_TPR",
+              "value": "r86400"
+            },
+            {
+              "name": "f_E",
+              "value": "3,4"
+            },
+            {
+              "name": "f_AL",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "search_jobs",
+      "name": "Search LinkedIn Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LinkedIn job listings from HTML\nconst html = $input.item.json.body || '';\nconst jobCards = [];\n\n// Extract job data using regex\nconst titleRegex = /<h3[^>]*class=\"[^\"]*base-search-card__title[^\"]*\"[^>]*>([^<]+)<\\/h3>/gi;\nconst companyRegex = /<h4[^>]*class=\"[^\"]*base-search-card__subtitle[^\"]*\"[^>]*>\\s*<a[^>]*>([^<]+)<\\/a>/gi;\nconst locationRegex = /<span[^>]*class=\"[^\"]*job-search-card__location[^\"]*\"[^>]*>([^<]+)<\\/span>/gi;\nconst linkRegex = /<a[^>]*class=\"[^\"]*base-card__full-link[^\"]*\"[^>]*href=\"([^\"]+)\"/gi;\n\nconst titles = [...html.matchAll(titleRegex)].map(m => m[1].trim());\nconst companies = [...html.matchAll(companyRegex)].map(m => m[1].trim());\nconst locations = [...html.matchAll(locationRegex)].map(m => m[1].trim());\nconst links = [...html.matchAll(linkRegex)].map(m => m[1].split('?')[0]);\n\nconst minLength = Math.min(titles.length, companies.length, locations.length, links.length);\n\nfor (let i = 0; i < minLength; i++) {\n  jobCards.push({\n    jobTitle: titles[i],\n    company: companies[i],\n    location: locations[i],\n    jobUrl: links[i],\n    jobId: links[i].match(/jobs\\/view\\/(\\d+)/)?.[1] || `job_${i}`,\n    scrapedAt: new Date().toISOString()\n  });\n}\n\nreturn jobCards.length > 0 ? jobCards.map(job => ({ json: job })) : [{ json: { noJobs: true } }];"
+      },
+      "id": "parse_jobs",
+      "name": "Parse Job Listings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !$json.noJobs }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check_jobs_exist",
+      "name": "Jobs Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "rate_limit",
+      "name": "Rate Limit",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1250, 300],
+      "webhookId": "rate-limit-webhook"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.jobUrl }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "fetch_details",
+      "name": "Fetch Job Description",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract job description from HTML\nconst html = $input.item.json.body || '';\nlet description = '';\n\n// Extract description\nconst descMatches = [\n  html.match(/<div[^>]*class=\"[^\"]*show-more-less-html__markup[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/i),\n  html.match(/<div[^>]*class=\"[^\"]*description__text[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/i)\n];\n\nfor (const match of descMatches) {\n  if (match && match[1]) {\n    description = match[1];\n    break;\n  }\n}\n\n// Clean HTML\ndescription = description\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/g, ' ')\n  .replace(/&amp;/g, '&')\n  .replace(/&lt;/g, '<')\n  .replace(/&gt;/g, '>')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nreturn {\n  json: {\n    ...items[0].json,\n    description: description || 'Description not available',\n    descriptionLower: description.toLowerCase()\n  }\n};"
+      },
+      "id": "extract_description",
+      "name": "Extract Description",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple keyword-based matching (no AI)\nconst profile = $('Set Job Preferences').item.json.profile;\nconst job = $input.item.json;\n\nconst descLower = job.descriptionLower || '';\nconst titleLower = job.jobTitle.toLowerCase();\nconst locationLower = job.location.toLowerCase();\n\n// Count matching keywords\nconst mustHaveMatches = profile.mustHaveKeywords.filter(kw => \n  descLower.includes(kw.toLowerCase()) || titleLower.includes(kw.toLowerCase())\n);\n\nconst preferredMatches = profile.preferredKeywords.filter(kw => \n  descLower.includes(kw.toLowerCase()) || titleLower.includes(kw.toLowerCase())\n);\n\nconst avoidMatches = profile.avoidKeywords.filter(kw => \n  descLower.includes(kw.toLowerCase()) || titleLower.includes(kw.toLowerCase())\n);\n\n// Check location match\nconst locationMatch = profile.preferredLocations.some(loc => \n  locationLower.includes(loc.toLowerCase())\n);\n\n// Check title match\nconst titleMatch = profile.jobTitles.some(title => \n  titleLower.includes(title.toLowerCase())\n);\n\n// Calculate simple score\nlet score = 0;\nscore += mustHaveMatches.length * 15;      // 15 points per must-have\nscore += preferredMatches.length * 5;       // 5 points per preferred\nscore -= avoidMatches.length * 20;          // -20 points for avoid keywords\nscore += locationMatch ? 15 : 0;            // 15 points for location match\nscore += titleMatch ? 20 : 0;               // 20 points for title match\n\n// Cap at 100\nscore = Math.min(Math.max(score, 0), 100);\n\n// Determine if good match\nconst isGoodMatch = \n  mustHaveMatches.length >= profile.minKeywordMatch &&\n  avoidMatches.length === 0 &&\n  score >= 60;\n\nreturn {\n  json: {\n    ...job,\n    matchScore: score,\n    isGoodMatch: isGoodMatch,\n    mustHaveMatches: mustHaveMatches,\n    preferredMatches: preferredMatches,\n    avoidMatches: avoidMatches,\n    locationMatch: locationMatch,\n    titleMatch: titleMatch,\n    reasoning: `Found ${mustHaveMatches.length} must-have skills, ${preferredMatches.length} preferred skills. ${avoidMatches.length > 0 ? 'Contains avoid keywords.' : ''}`,\n    analyzedAt: new Date().toISOString()\n  }\n};"
+      },
+      "id": "keyword_matching",
+      "name": "Keyword Matching",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 300],
+      "notes": "Simple keyword matching - no AI needed"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isGoodMatch }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "filter_matches",
+      "name": "Filter Good Matches",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.scrapedAt }}",
+            "Job Title": "={{ $json.jobTitle }}",
+            "Company": "={{ $json.company }}",
+            "Location": "={{ $json.location }}",
+            "Match Score": "={{ $json.matchScore }}",
+            "Must-Have Skills": "={{ $json.mustHaveMatches.join(', ') }}",
+            "Preferred Skills": "={{ $json.preferredMatches.join(', ') }}",
+            "Job URL": "={{ $json.jobUrl }}",
+            "Status": "New - Review Needed",
+            "Notes": ""
+          }
+        }
+      },
+      "id": "log_to_sheet",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2250, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "combineAll"
+      },
+      "id": "aggregate_all",
+      "name": "Aggregate All Matches",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [2450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.all().map(item => item.json);\n\nif (jobs.length === 0 || jobs[0].noJobs) {\n  return {\n    json: {\n      hasJobs: false,\n      message: 'No matching jobs found in the last search'\n    }\n  };\n}\n\n// Sort by match score\njobs.sort((a, b) => b.matchScore - a.matchScore);\n\nconst today = new Date().toLocaleDateString('en-IN', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\n\n// Generate simple HTML email\nlet html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }\n    .container { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }\n    .header { background: linear-gradient(135deg, #0077B5 0%, #00A0DC 100%); color: white; padding: 30px; text-align: center; }\n    .header h1 { margin: 0; font-size: 28px; }\n    .content { padding: 30px; }\n    .summary { background: #e8f4f8; border-left: 4px solid #0077B5; padding: 15px; margin-bottom: 20px; border-radius: 4px; }\n    .job-card { border: 1px solid #e0e0e0; border-radius: 6px; padding: 20px; margin-bottom: 20px; background: #fafafa; }\n    .job-title { font-size: 18px; font-weight: bold; color: #0077B5; margin-bottom: 8px; }\n    .job-meta { color: #666; margin: 5px 0; font-size: 14px; }\n    .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-right: 8px; }\n    .badge.excellent { background: #10B981; color: white; }\n    .badge.good { background: #3B82F6; color: white; }\n    .badge.moderate { background: #F59E0B; color: white; }\n    .skills { margin: 10px 0; }\n    .skill { display: inline-block; background: #E8F5E9; color: #2E7D32; padding: 3px 10px; border-radius: 4px; font-size: 12px; margin: 3px; border: 1px solid #C8E6C9; }\n    .btn { display: inline-block; background: #0077B5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px; }\n    .footer { text-align: center; padding: 20px; color: #666; font-size: 13px; border-top: 1px solid #e0e0e0; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🎯 Your Job Matches</h1>\n      <p>${today}</p>\n      <p>Found <strong>${jobs.length}</strong> matching job${jobs.length !== 1 ? 's' : ''}</p>\n    </div>\n    \n    <div class=\"content\">\n      <div class=\"summary\">\n        <strong>📊 Summary:</strong> ${jobs.length} job${jobs.length !== 1 ? 's' : ''} matched your keywords\n        <br/>⭐ Top matches: ${jobs.filter(j => j.matchScore >= 80).length}\n        <br/>✅ Good matches: ${jobs.filter(j => j.matchScore >= 60 && j.matchScore < 80).length}\n      </div>\n`;\n\njobs.forEach((job, index) => {\n  const badgeClass = job.matchScore >= 80 ? 'excellent' : job.matchScore >= 60 ? 'good' : 'moderate';\n  const badgeText = job.matchScore >= 80 ? 'Excellent' : job.matchScore >= 60 ? 'Good' : 'Moderate';\n  \n  html += `\n      <div class=\"job-card\">\n        <div class=\"job-title\">${index + 1}. ${job.jobTitle}</div>\n        <div>\n          <span class=\"badge ${badgeClass}\">${job.matchScore}% Match</span>\n        </div>\n        <div class=\"job-meta\">🏢 ${job.company}</div>\n        <div class=\"job-meta\">📍 ${job.location}</div>\n        \n        <div style=\"margin-top: 15px;\">\n          <strong>✅ Matching Skills:</strong>\n          <div class=\"skills\">\n            ${job.mustHaveMatches.map(skill => `<span class=\"skill\">${skill}</span>`).join('')}\n            ${job.preferredMatches.map(skill => `<span class=\"skill\" style=\"background:#FFF3E0;color:#E65100;border-color:#FFE0B2;\">${skill}</span>`).join('')}\n          </div>\n        </div>\n        \n        ${job.locationMatch ? '<div style=\"margin:10px 0;\">📍 <strong>Preferred location match!</strong></div>' : ''}\n        ${job.titleMatch ? '<div style=\"margin:10px 0;\">🎯 <strong>Job title matches your profile!</strong></div>' : ''}\n        \n        <div style=\"margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;\">\n          <strong>💡 Tip:</strong> Review the job description and apply if it matches your goals\n        </div>\n        \n        <a href=\"${job.jobUrl}\" class=\"btn\" target=\"_blank\">View & Apply on LinkedIn →</a>\n      </div>\n  `;\n});\n\nhtml += `\n    </div>\n    \n    <div class=\"footer\">\n      <p><strong>🤖 Automated Job Matching by n8n</strong></p>\n      <p>No AI used - Pure keyword matching based on your preferences</p>\n      <p style=\"margin-top: 10px;\">💼 Good luck with your applications! 🚀</p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  json: {\n    hasJobs: true,\n    jobCount: jobs.length,\n    excellentMatches: jobs.filter(j => j.matchScore >= 80).length,\n    goodMatches: jobs.filter(j => j.matchScore >= 60).length,\n    emailHTML: html,\n    emailSubject: `🎯 ${jobs.length} Job Match${jobs.length !== 1 ? 'es' : ''} Found - ${today}`,\n    jobs: jobs\n  }\n};"
+      },
+      "id": "create_email",
+      "name": "Create Email Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.hasJobs }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check_has_jobs",
+      "name": "Has Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2850, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "prateek.devfullstack@gmail.com",
+        "toEmail": "prateek.devfullstack@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "emailFormat": "html",
+        "message": "={{ $json.emailHTML }}"
+      },
+      "id": "send_email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [3050, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "schedule_trigger": {
+      "main": [
+        [
+          {
+            "node": "set_profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_profile": {
+      "main": [
+        [
+          {
+            "node": "search_jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_jobs": {
+      "main": [
+        [
+          {
+            "node": "parse_jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_jobs": {
+      "main": [
+        [
+          {
+            "node": "check_jobs_exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_jobs_exist": {
+      "main": [
+        [
+          {
+            "node": "rate_limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "rate_limit": {
+      "main": [
+        [
+          {
+            "node": "fetch_details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch_details": {
+      "main": [
+        [
+          {
+            "node": "extract_description",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract_description": {
+      "main": [
+        [
+          {
+            "node": "keyword_matching",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "keyword_matching": {
+      "main": [
+        [
+          {
+            "node": "filter_matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter_matches": {
+      "main": [
+        [
+          {
+            "node": "log_to_sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "log_to_sheet": {
+      "main": [
+        [
+          {
+            "node": "aggregate_all",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "aggregate_all": {
+      "main": [
+        [
+          {
+            "node": "create_email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_email": {
+      "main": [
+        [
+          {
+            "node": "check_has_jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_has_jobs": {
+      "main": [
+        [
+          {
+            "node": "send_email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "instanceId": "your-n8n-instance-id"
+  },
+  "id": "linkedin-simple-tracker",
+  "tags": []
+}
