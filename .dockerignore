@@ -1,0 +1,32 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Documentation
+README.md
+*.md
+
+# Environment files (will be used at runtime)
+.env.example
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node modules (if any)
+node_modules
+
+# Logs
+*.log
+logs
+
+# Backup scripts and local data
+scripts/
+backups/
